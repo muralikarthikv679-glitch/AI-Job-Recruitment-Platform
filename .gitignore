@@ -29,8 +29,3 @@ Thumbs.db
 
 # Uploaded resumes
 backend/uploads/
-
-# Local backend configuration
-backend/src/main/resources/application.yml
-backend/src/main/resources/application-mysql.yml
-backend/src/main/resources/application-postgres.yml
