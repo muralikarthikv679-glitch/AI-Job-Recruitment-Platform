@@ -1,0 +1,36 @@
+# Frontend dependencies
+frontend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Backend build
+backend/target/
+
+# Java / Maven
+*.class
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Uploaded resumes
+backend/uploads/
+
+# Local backend configuration
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-mysql.yml
+backend/src/main/resources/application-postgres.yml
