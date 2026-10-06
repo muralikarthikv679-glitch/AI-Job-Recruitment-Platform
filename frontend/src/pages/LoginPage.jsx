@@ -28,7 +28,18 @@ export default function LoginPage() {
         navigate('/jobs');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      const serverMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        (typeof err.response?.data === 'string' && !err.response.data.includes('<!DOCTYPE') ? err.response.data : null);
+
+      if (serverMsg) {
+        setError(serverMsg);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setError('Unable to reach backend service. The cloud backend may be waking up (takes ~30s on free tier). Please retry in a moment.');
+      } else {
+        setError('Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
