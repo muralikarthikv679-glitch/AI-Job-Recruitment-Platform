@@ -7,31 +7,43 @@ export function sanitizeUrl(url) {
   if (!url) return '';
   let clean = url.trim();
 
-  // Strip accidental double/triple protocols like https://https:// or http://https://
-  clean = clean.replace(/^(https?:\/\/)+/i, (match) => {
-    return match.toLowerCase().startsWith('http://') && !match.includes('https://') ? 'http://' : 'https://';
-  });
+  // If already relative /api
+  if (clean === '/api' || clean.startsWith('/api/')) {
+    return clean.replace(/\/+$/, '');
+  }
 
-  // If starts with localhost or ip, ensure http://
+  // Strip accidental double/triple or malformed protocols like https://https//, https//, https://https://, http//, etc.
+  clean = clean.replace(/^(https?:?\/?\/)+/gi, '');
+  clean = clean.replace(/^(\/+)+/, '');
+
   if (/^(localhost|127\.0\.0\.1)(:\d+)?/i.test(clean)) {
     clean = `http://${clean}`;
-  } else if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/')) {
+  } else if (!clean.startsWith('/')) {
     clean = `https://${clean}`;
   }
 
-  // Ensure trailing slash is removed
-  return clean.endsWith('/') ? clean.slice(0, -1) : clean;
+  return clean.replace(/\/+$/, '');
 }
 
 export function resolveBaseUrl() {
   if (typeof window !== 'undefined') {
     const custom = localStorage.getItem('talentflow_api_url');
     if (custom && custom.trim()) {
-      const sanitized = sanitizeUrl(custom);
-      if (sanitized !== custom) {
-        localStorage.setItem('talentflow_api_url', sanitized);
+      // Auto-purge any corrupted or malformed entries
+      if (
+        custom.includes('https//') ||
+        custom.includes('http//') ||
+        custom.includes('undefined') ||
+        custom.includes('null')
+      ) {
+        localStorage.removeItem('talentflow_api_url');
+      } else {
+        const sanitized = sanitizeUrl(custom);
+        if (sanitized !== custom) {
+          localStorage.setItem('talentflow_api_url', sanitized);
+        }
+        return sanitized;
       }
-      return sanitized;
     }
   }
 
@@ -41,8 +53,14 @@ export function resolveBaseUrl() {
   }
 
   // If running locally in dev or browser on localhost
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return '/api';
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return '/api';
+    }
+    // If hosted on vercel.app, use /api proxy rewrite for 100% reliable zero-CORS requests
+    if (window.location.hostname.endsWith('vercel.app')) {
+      return '/api';
+    }
   }
 
   return CLOUD_BACKEND_URL;

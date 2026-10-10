@@ -1,8 +1,8 @@
-# Multi-stage Dockerfile for Spring Boot backend
+# Multi-stage Dockerfile for Spring Boot backend (Root build context)
 FROM maven:3.9.8-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY pom.xml .
-COPY src ./src
+COPY backend/pom.xml ./pom.xml
+COPY backend/src ./src
 ENV MAVEN_OPTS="-Xmx384m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
 RUN mvn clean package -DskipTests --no-transfer-progress -B
 

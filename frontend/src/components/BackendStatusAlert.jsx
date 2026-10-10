@@ -11,7 +11,14 @@ export default function BackendStatusAlert({ error, onRetry }) {
   const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
-    setActiveUrl(getActiveApiBaseUrl());
+    const current = getActiveApiBaseUrl();
+    if (current && (current.includes('https//') || current.includes('http//'))) {
+      const fixed = sanitizeUrl(current);
+      setCustomApiBaseUrl(fixed);
+      setActiveUrl(fixed);
+    } else {
+      setActiveUrl(current);
+    }
   }, []);
 
   useEffect(() => {
@@ -127,10 +134,26 @@ export default function BackendStatusAlert({ error, onRetry }) {
 
         <button
           type="button"
-          onClick={() => handleSelectUrl(isLocal ? CLOUD_BACKEND_URL : LOCAL_BACKEND_URL)}
-          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 ml-auto transition-all"
+          onClick={() => handleSelectUrl(CLOUD_BACKEND_URL)}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-all"
         >
-          <span>Switch to {isLocal ? 'Cloud (Render)' : 'Local (localhost:8080)'}</span>
+          <span>Use Cloud (Render)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSelectUrl('/api')}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-all"
+        >
+          <span>Use Proxy (/api)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSelectUrl(LOCAL_BACKEND_URL)}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-all"
+        >
+          <span>Use Local (8080)</span>
         </button>
       </div>
 

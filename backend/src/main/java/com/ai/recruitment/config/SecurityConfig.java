@@ -60,7 +60,8 @@ public class SecurityConfig {
                     "/ws/**",
                     "/uploads/**"
                 ).permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/jobs", "/api/jobs/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/jobs/**").permitAll()
+                .requestMatchers(HttpMethod.HEAD, "/api/jobs/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/recruiter/**").hasAnyRole("RECRUITER", "ADMIN")
                 .requestMatchers("/api/candidate/**").hasAnyRole("CANDIDATE", "ADMIN")
