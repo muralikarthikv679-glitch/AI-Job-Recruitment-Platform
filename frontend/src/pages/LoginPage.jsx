@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import BackendStatusAlert from '../components/BackendStatusAlert';
 import { Layers, Lock, Mail, ArrowRight, AlertCircle, Zap } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isNetworkError, setIsNetworkError] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleLogin = async (e) => {
+    if (e) e.preventDefault();
     setError('');
+    setIsNetworkError(false);
     setLoading(true);
 
     try {
-      const user = await login(email, password);
+      const user = await login(email.trim().toLowerCase(), password);
       if (user.role === 'CANDIDATE') {
         navigate('/candidate/dashboard');
       } else if (user.role === 'RECRUITER') {
@@ -35,10 +38,13 @@ export default function LoginPage() {
 
       if (serverMsg) {
         setError(serverMsg);
-      } else if (err.code === 'ERR_NETWORK' || !err.response) {
-        setError('Unable to reach backend service. The cloud backend may be waking up (takes ~30s on free tier). Please retry in a moment.');
+        setIsNetworkError(false);
+      } else if (err.code === 'ERR_NETWORK' || !err.response || err.message?.includes('Network Error')) {
+        setError('Unable to reach backend service. The cloud backend may be waking up (takes ~30s on free tier).');
+        setIsNetworkError(true);
       } else {
         setError('Invalid email or password');
+        setIsNetworkError(false);
       }
     } finally {
       setLoading(false);
@@ -49,11 +55,12 @@ export default function LoginPage() {
     setEmail(demoEmail);
     setPassword(demoPassword);
     setError('');
+    setIsNetworkError(false);
   };
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="max-w-md w-full space-y-8">
+      <div className="max-w-md w-full space-y-6">
         <div className="text-center">
           <div className="inline-flex w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white items-center justify-center shadow-lg shadow-indigo-500/20 mb-3">
             <Layers className="w-6 h-6" />
@@ -65,6 +72,14 @@ export default function LoginPage() {
             Access your recruitment pipeline, match scores, and application tracking
           </p>
         </div>
+
+        {/* Backend Connection Alert if network error */}
+        {isNetworkError && (
+          <BackendStatusAlert
+            error={error}
+            onRetry={() => handleLogin()}
+          />
+        )}
 
         {/* Demo Fast Login Selector */}
         <div className="p-4 bg-slate-900/80 border border-slate-700 rounded-2xl">
@@ -97,8 +112,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 bg-slate-900/90 p-8 rounded-3xl border border-slate-800 shadow-2xl">
-          {error && (
+        <form onSubmit={handleLogin} className="space-y-4 bg-slate-900/90 p-8 rounded-3xl border border-slate-800 shadow-2xl">
+          {error && !isNetworkError && (
             <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>

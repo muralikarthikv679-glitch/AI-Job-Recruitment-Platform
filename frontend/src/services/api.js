@@ -1,20 +1,56 @@
 import axios from 'axios';
 
-const PROD_BACKEND_URL = 'https://ai-job-recruitment-platform-7p1t.onrender.com/api';
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '/api' : PROD_BACKEND_URL);
-const API_BASE_URL = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
+export const CLOUD_BACKEND_URL = 'https://ai-job-recruitment-platform-7p1t.onrender.com/api';
+export const LOCAL_BACKEND_URL = 'http://localhost:8080/api';
+
+export function resolveBaseUrl() {
+  const custom = typeof window !== 'undefined' ? localStorage.getItem('talentflow_api_url') : null;
+  if (custom && custom.trim()) {
+    return custom.trim().endsWith('/') ? custom.trim().slice(0, -1) : custom.trim();
+  }
+
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().endsWith('/') ? envUrl.trim().slice(0, -1) : envUrl.trim();
+  }
+
+  // If running locally in dev or local browser, default to '/api' (proxied to localhost:8080)
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return '/api';
+  }
+
+  return CLOUD_BACKEND_URL;
+}
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: resolveBaseUrl(),
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+// Allow updating the active base URL dynamically
+export function setCustomApiBaseUrl(url) {
+  if (typeof window !== 'undefined') {
+    if (url) {
+      localStorage.setItem('talentflow_api_url', url);
+    } else {
+      localStorage.removeItem('talentflow_api_url');
+    }
+  }
+  api.defaults.baseURL = resolveBaseUrl();
+}
+
+export function getActiveApiBaseUrl() {
+  return api.defaults.baseURL || resolveBaseUrl();
+}
+
 // Attach JWT Bearer token to every request if available
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    config.baseURL = resolveBaseUrl();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,13 +64,19 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Token expired or invalid
-      // localStorage.removeItem('token');
-      // localStorage.removeItem('user');
+      // Optional: Handle 401 unauth
     }
     return Promise.reject(error);
   }
 );
+
+export const healthAPI = {
+  checkHealth: async (targetUrl) => {
+    const url = targetUrl || getActiveApiBaseUrl();
+    const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    return axios.get(`${cleanUrl}/health`, { timeout: 10000 });
+  },
+};
 
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),

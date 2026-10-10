@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import BackendStatusAlert from '../components/BackendStatusAlert';
 import { Layers, Lock, Mail, User, Building, Phone, MapPin, ArrowRight, AlertCircle, Briefcase } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -13,25 +14,27 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
   const [error, setError] = useState('');
+  const [isNetworkError, setIsNetworkError] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleRegister = async (e) => {
+    if (e) e.preventDefault();
     setError('');
+    setIsNetworkError(false);
     setLoading(true);
 
     try {
       const user = await register({
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
         password,
         role,
-        companyName: role === 'RECRUITER' ? companyName : null,
-        headline: role === 'CANDIDATE' ? headline : null,
-        phone,
-        location,
+        companyName: role === 'RECRUITER' ? (companyName.trim() || 'Enterprise Tech') : null,
+        headline: role === 'CANDIDATE' ? (headline.trim() || 'Software Engineer') : null,
+        phone: phone.trim() || null,
+        location: location.trim() || null,
       });
 
       if (user.role === 'CANDIDATE') {
@@ -49,10 +52,13 @@ export default function RegisterPage() {
 
       if (serverMsg) {
         setError(serverMsg);
-      } else if (err.code === 'ERR_NETWORK' || !err.response) {
-        setError('Unable to reach backend service. The cloud backend may be waking up (takes ~30s on free tier). Please retry in a moment.');
+        setIsNetworkError(false);
+      } else if (err.code === 'ERR_NETWORK' || !err.response || err.message?.includes('Network Error')) {
+        setError('Unable to reach backend service. The cloud backend may be waking up (takes ~30s on free tier).');
+        setIsNetworkError(true);
       } else {
         setError('Registration failed. Please check your inputs.');
+        setIsNetworkError(false);
       }
     } finally {
       setLoading(false);
@@ -61,7 +67,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="max-w-xl w-full space-y-8">
+      <div className="max-w-xl w-full space-y-6">
         <div className="text-center">
           <div className="inline-flex w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white items-center justify-center shadow-lg shadow-indigo-500/20 mb-3">
             <Layers className="w-6 h-6" />
@@ -73,6 +79,14 @@ export default function RegisterPage() {
             Join the enterprise talent recruitment ecosystem
           </p>
         </div>
+
+        {/* Backend Connection Alert if network error */}
+        {isNetworkError && (
+          <BackendStatusAlert
+            error={error}
+            onRetry={() => handleRegister()}
+          />
+        )}
 
         {/* Role Toggle */}
         <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
@@ -103,8 +117,8 @@ export default function RegisterPage() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 bg-slate-900/90 p-8 rounded-3xl border border-slate-800 shadow-2xl">
-          {error && (
+        <form onSubmit={handleRegister} className="space-y-4 bg-slate-900/90 p-8 rounded-3xl border border-slate-800 shadow-2xl">
+          {error && !isNetworkError && (
             <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
@@ -184,7 +198,7 @@ export default function RegisterPage() {
                   type="text"
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
-                  placeholder="e.g. Senior Full Stack Java Developer"
+                  placeholder="e.g. Full Stack Developer"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
