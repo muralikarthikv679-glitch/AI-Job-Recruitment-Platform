@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { healthAPI, getActiveApiBaseUrl, setCustomApiBaseUrl, CLOUD_BACKEND_URL, LOCAL_BACKEND_URL } from '../services/api';
-import { AlertCircle, RefreshCw, Server, CheckCircle2, Settings, ExternalLink } from 'lucide-react';
+import { healthAPI, getActiveApiBaseUrl, setCustomApiBaseUrl, sanitizeUrl, CLOUD_BACKEND_URL, LOCAL_BACKEND_URL } from '../services/api';
+import { AlertCircle, RefreshCw, Server, CheckCircle2, Settings } from 'lucide-react';
 
 export default function BackendStatusAlert({ error, onRetry }) {
   const [activeUrl, setActiveUrl] = useState(getActiveApiBaseUrl());
@@ -28,10 +28,11 @@ export default function BackendStatusAlert({ error, onRetry }) {
     setChecking(true);
     setPingStatus(null);
     try {
-      await healthAPI.checkHealth(targetUrl);
+      const cleanUrl = sanitizeUrl(targetUrl);
+      await healthAPI.checkHealth(cleanUrl);
       setPingStatus('SUCCESS');
       if (onRetry) {
-        setTimeout(() => onRetry(), 800);
+        setTimeout(() => onRetry(), 600);
       }
     } catch (e) {
       setPingStatus('FAILED');
@@ -41,15 +42,17 @@ export default function BackendStatusAlert({ error, onRetry }) {
   };
 
   const handleStartWakeCountdown = () => {
-    setCountdown(20);
+    setCountdown(25);
     setChecking(true);
   };
 
   const handleSelectUrl = (url) => {
-    setCustomApiBaseUrl(url);
-    setActiveUrl(getActiveApiBaseUrl());
+    const clean = url ? sanitizeUrl(url) : null;
+    setCustomApiBaseUrl(clean);
+    const updated = getActiveApiBaseUrl();
+    setActiveUrl(updated);
     setPingStatus(null);
-    handleTestConnection(url || getActiveApiBaseUrl());
+    handleTestConnection(updated);
   };
 
   const isLocal = activeUrl.includes('localhost') || activeUrl.includes('127.0.0.1') || activeUrl === '/api';
@@ -160,7 +163,7 @@ export default function BackendStatusAlert({ error, onRetry }) {
               onClick={() => handleSelectUrl(null)}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg text-xs border border-slate-700"
             >
-              Reset
+              Reset to Default
             </button>
           </div>
         </div>

@@ -3,18 +3,44 @@ import axios from 'axios';
 export const CLOUD_BACKEND_URL = 'https://ai-job-recruitment-platform-7p1t.onrender.com/api';
 export const LOCAL_BACKEND_URL = 'http://localhost:8080/api';
 
+export function sanitizeUrl(url) {
+  if (!url) return '';
+  let clean = url.trim();
+
+  // Strip accidental double/triple protocols like https://https:// or http://https://
+  clean = clean.replace(/^(https?:\/\/)+/i, (match) => {
+    return match.toLowerCase().startsWith('http://') && !match.includes('https://') ? 'http://' : 'https://';
+  });
+
+  // If starts with localhost or ip, ensure http://
+  if (/^(localhost|127\.0\.0\.1)(:\d+)?/i.test(clean)) {
+    clean = `http://${clean}`;
+  } else if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/')) {
+    clean = `https://${clean}`;
+  }
+
+  // Ensure trailing slash is removed
+  return clean.endsWith('/') ? clean.slice(0, -1) : clean;
+}
+
 export function resolveBaseUrl() {
-  const custom = typeof window !== 'undefined' ? localStorage.getItem('talentflow_api_url') : null;
-  if (custom && custom.trim()) {
-    return custom.trim().endsWith('/') ? custom.trim().slice(0, -1) : custom.trim();
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('talentflow_api_url');
+    if (custom && custom.trim()) {
+      const sanitized = sanitizeUrl(custom);
+      if (sanitized !== custom) {
+        localStorage.setItem('talentflow_api_url', sanitized);
+      }
+      return sanitized;
+    }
   }
 
   const envUrl = import.meta.env.VITE_API_BASE_URL;
   if (envUrl && envUrl.trim()) {
-    return envUrl.trim().endsWith('/') ? envUrl.trim().slice(0, -1) : envUrl.trim();
+    return sanitizeUrl(envUrl);
   }
 
-  // If running locally in dev or local browser, default to '/api' (proxied to localhost:8080)
+  // If running locally in dev or browser on localhost
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return '/api';
   }
@@ -30,11 +56,11 @@ const api = axios.create({
   },
 });
 
-// Allow updating the active base URL dynamically
 export function setCustomApiBaseUrl(url) {
   if (typeof window !== 'undefined') {
-    if (url) {
-      localStorage.setItem('talentflow_api_url', url);
+    if (url && url.trim()) {
+      const sanitized = sanitizeUrl(url);
+      localStorage.setItem('talentflow_api_url', sanitized);
     } else {
       localStorage.removeItem('talentflow_api_url');
     }
@@ -43,7 +69,7 @@ export function setCustomApiBaseUrl(url) {
 }
 
 export function getActiveApiBaseUrl() {
-  return api.defaults.baseURL || resolveBaseUrl();
+  return sanitizeUrl(api.defaults.baseURL || resolveBaseUrl());
 }
 
 // Attach JWT Bearer token to every request if available
@@ -64,7 +90,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Optional: Handle 401 unauth
+      // Optional: handle token expiry
     }
     return Promise.reject(error);
   }
@@ -72,8 +98,8 @@ api.interceptors.response.use(
 
 export const healthAPI = {
   checkHealth: async (targetUrl) => {
-    const url = targetUrl || getActiveApiBaseUrl();
-    const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    const rawUrl = targetUrl || getActiveApiBaseUrl();
+    const cleanUrl = sanitizeUrl(rawUrl);
     return axios.get(`${cleanUrl}/health`, { timeout: 10000 });
   },
 };
