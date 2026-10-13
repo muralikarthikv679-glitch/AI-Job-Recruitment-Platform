@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { prewarmBackend } from './services/api';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
@@ -41,6 +42,18 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 };
 
 export default function App() {
+  useEffect(() => {
+    // Immediately pre-warm the backend on initial visit
+    prewarmBackend();
+
+    // Heartbeat ping every 5 minutes to keep cloud backend hot and prevent cold starts
+    const interval = setInterval(() => {
+      prewarmBackend();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <AuthProvider>
       <Router>

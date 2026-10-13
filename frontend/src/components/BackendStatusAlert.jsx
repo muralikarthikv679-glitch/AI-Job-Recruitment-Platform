@@ -11,14 +11,32 @@ export default function BackendStatusAlert({ error, onRetry }) {
   const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
-    const current = getActiveApiBaseUrl();
-    if (current && (current.includes('https//') || current.includes('http//'))) {
-      const fixed = sanitizeUrl(current);
-      setCustomApiBaseUrl(fixed);
-      setActiveUrl(fixed);
+    let current = getActiveApiBaseUrl();
+    if (
+      current &&
+      (current.includes('8888') ||
+        current.includes('https//') ||
+        current.includes('http//') ||
+        current.includes('undefined') ||
+        current.includes('null'))
+    ) {
+      localStorage.removeItem('talentflow_api_url');
+      const fallback = sanitizeUrl(CLOUD_BACKEND_URL);
+      setCustomApiBaseUrl(fallback);
+      setActiveUrl(fallback);
+      handleTestConnection(fallback);
     } else {
       setActiveUrl(current);
     }
+
+    const handleBackendSwitched = (e) => {
+      if (e.detail?.url) {
+        setActiveUrl(e.detail.url);
+        setPingStatus('SUCCESS');
+      }
+    };
+    window.addEventListener('talentflow:backend_switched', handleBackendSwitched);
+    return () => window.removeEventListener('talentflow:backend_switched', handleBackendSwitched);
   }, []);
 
   useEffect(() => {
@@ -60,6 +78,12 @@ export default function BackendStatusAlert({ error, onRetry }) {
     setActiveUrl(updated);
     setPingStatus(null);
     handleTestConnection(updated);
+  };
+
+  const handleAutoFix = () => {
+    localStorage.removeItem('talentflow_api_url');
+    // Try cloud first as it is reliable and already online
+    handleSelectUrl(CLOUD_BACKEND_URL);
   };
 
   const isLocal = activeUrl.includes('localhost') || activeUrl.includes('127.0.0.1') || activeUrl === '/api';
@@ -121,6 +145,15 @@ export default function BackendStatusAlert({ error, onRetry }) {
           <span>{checking ? 'Checking Connection...' : 'Ping Server / Retry'}</span>
         </button>
 
+        <button
+          type="button"
+          onClick={handleAutoFix}
+          className="px-3 py-1.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+          title="Auto-clears broken URLs and connects to online backend"
+        >
+          <span>⚡ Auto-Fix Connection</span>
+        </button>
+
         {!isLocal && (
           <button
             type="button"
@@ -142,18 +175,18 @@ export default function BackendStatusAlert({ error, onRetry }) {
 
         <button
           type="button"
-          onClick={() => handleSelectUrl('/api')}
-          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-all"
-        >
-          <span>Use Proxy (/api)</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => handleSelectUrl(LOCAL_BACKEND_URL)}
           className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-all"
         >
           <span>Use Local (8080)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSelectUrl('/api')}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-all"
+        >
+          <span>Use Proxy (/api)</span>
         </button>
       </div>
 
@@ -172,8 +205,12 @@ export default function BackendStatusAlert({ error, onRetry }) {
             <button
               type="button"
               onClick={() => {
-                if (customInput.trim()) {
-                  handleSelectUrl(customInput.trim());
+                let target = customInput.trim();
+                if (target) {
+                  if (target.includes('8888')) {
+                    target = target.replace('8888', '8080');
+                  }
+                  handleSelectUrl(target);
                   setCustomInput('');
                 }
               }}
@@ -183,7 +220,10 @@ export default function BackendStatusAlert({ error, onRetry }) {
             </button>
             <button
               type="button"
-              onClick={() => handleSelectUrl(null)}
+              onClick={() => {
+                localStorage.removeItem('talentflow_api_url');
+                handleSelectUrl(null);
+              }}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg text-xs border border-slate-700"
             >
               Reset to Default

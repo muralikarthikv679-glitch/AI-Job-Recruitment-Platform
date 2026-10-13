@@ -29,8 +29,9 @@ export function resolveBaseUrl() {
   if (typeof window !== 'undefined') {
     const custom = localStorage.getItem('talentflow_api_url');
     if (custom && custom.trim()) {
-      // Auto-purge any corrupted or malformed entries
+      // Auto-purge any corrupted, 8888, or malformed entries
       if (
+        custom.includes('8888') ||
         custom.includes('https//') ||
         custom.includes('http//') ||
         custom.includes('undefined') ||
@@ -68,7 +69,7 @@ export function resolveBaseUrl() {
 
 const api = axios.create({
   baseURL: resolveBaseUrl(),
-  timeout: 30000,
+  timeout: 35000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -76,7 +77,7 @@ const api = axios.create({
 
 export function setCustomApiBaseUrl(url) {
   if (typeof window !== 'undefined') {
-    if (url && url.trim()) {
+    if (url && url.trim() && !url.includes('8888')) {
       const sanitized = sanitizeUrl(url);
       localStorage.setItem('talentflow_api_url', sanitized);
     } else {
@@ -84,6 +85,9 @@ export function setCustomApiBaseUrl(url) {
     }
   }
   api.defaults.baseURL = resolveBaseUrl();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('talentflow:backend_switched', { detail: { url: api.defaults.baseURL } }));
+  }
 }
 
 export function getActiveApiBaseUrl() {
@@ -103,16 +107,84 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for session expiry handling
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Response interceptor with automatic resilience, progressive retries, and seamless failover
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    if (!originalRequest) return Promise.reject(error);
+
+    originalRequest._retryCount = originalRequest._retryCount || 0;
+    const maxRetries = 4;
+
+    // Check if network connection failed, server cold-start, or gateway timeout
+    const isNetworkOrProxyFailure =
+      !error.response ||
+      error.code === 'ERR_NETWORK' ||
+      error.code === 'ECONNABORTED' ||
+      (error.message && error.message.includes('Network Error')) ||
+      [500, 502, 503, 504].includes(error.response?.status);
+
+    if (isNetworkOrProxyFailure && originalRequest._retryCount < maxRetries) {
+      originalRequest._retryCount += 1;
+      const currentUrl = originalRequest.baseURL || resolveBaseUrl();
+
+      // Always clear any broken or corrupt custom overrides from localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('talentflow_api_url');
+      }
+
+      const isFailingLocalOrBroken =
+        currentUrl.includes('localhost') ||
+        currentUrl.includes('127.0.0.1') ||
+        currentUrl === '/api' ||
+        currentUrl.includes('8888');
+
+      // If local or broken port failed, immediately failover to Cloud backend
+      if (isFailingLocalOrBroken) {
+        console.warn(`[TalentFlow API] Endpoint ${currentUrl} unavailable. Auto-routing to Cloud (${CLOUD_BACKEND_URL})...`);
+        api.defaults.baseURL = CLOUD_BACKEND_URL;
+        originalRequest.baseURL = CLOUD_BACKEND_URL;
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('talentflow:backend_switched', { detail: { url: CLOUD_BACKEND_URL } }));
+        }
+      }
+
+      // Progressive delay to give server/cloud time to boot if cold
+      const delays = [1500, 3000, 5000, 7000];
+      const waitTime = delays[originalRequest._retryCount - 1] || 3000;
+      console.info(`[TalentFlow API] Retrying request (${originalRequest._retryCount}/${maxRetries}) in ${waitTime}ms...`);
+      await sleep(waitTime);
+
+      try {
+        return await axios(originalRequest);
+      } catch (retryErr) {
+        return Promise.reject(retryErr);
+      }
+    }
+
     if (error.response && error.response.status === 401) {
       // Optional: handle token expiry
     }
     return Promise.reject(error);
   }
 );
+
+export const prewarmBackend = async () => {
+  try {
+    const url = getActiveApiBaseUrl();
+    await healthAPI.checkHealth(url);
+  } catch (e) {
+    try {
+      await healthAPI.checkHealth(CLOUD_BACKEND_URL);
+    } catch (_) {
+      // ignore
+    }
+  }
+};
 
 export const healthAPI = {
   checkHealth: async (targetUrl) => {
